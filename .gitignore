@@ -40,5 +40,27 @@
 # debug information files
 *.dwo
 
-# Custom
+# VSCode-specific files
+.vscode/
+!.vscode/c_cpp_properties.json  # Include if you want to share IntelliSense settings
+!.vscode/launch.json           # Include if you want to share debug settings
+!.vscode/tasks.json            # Include if you want to share task settings
+
+# CMake build artifacts
+build/
+out/
+bin/
+*.dir/
+
+# CMake cache and generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Logs and other temporary files
+*.log
+*.cache
+
 schedule.markdown
