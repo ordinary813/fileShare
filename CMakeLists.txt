@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Boost
+set(CMAKE_FIND_PACKAGE_PREFER_CONFIG TRUE)
 find_package(Boost 1.65 REQUIRED COMPONENTS system)
 if(NOT Boost_FOUND)
     message(FATAL_ERROR "Boost not found!")

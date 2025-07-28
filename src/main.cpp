@@ -32,10 +32,13 @@ void client_mode(const std::string& host, unsigned short port, const std::string
 }
 
 int main() {
-    unsigned short port = 8080;
+    unsigned short port;
     std::string filename = "test.txt";
 
     boost::asio::io_context io_context;
+
+    std::cout << "Enter port to listen on: ";
+    std::cin >> port;
 
     // Start server in separate thread
     std::thread server_thread([&]() {
