@@ -12,10 +12,13 @@ if(NOT Boost_FOUND)
     message(FATAL_ERROR "Boost not found!")
 endif()
 
+find_package(OpenSSL REQUIRED)
+
 # Executable sources
 set(SOURCES
     src/main.cpp
     src/connection.cpp
+    src/crypto.cpp
 )
 
 # Add executable
@@ -27,8 +30,20 @@ target_include_directories(peer PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
 
-# Link Boost
-target_link_libraries(peer PRIVATE ${Boost_LIBRARIES})
+include(FetchContent)
+FetchContent_Declare(
+  json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.11.2
+)
+FetchContent_MakeAvailable(json)
+
+target_link_libraries(peer PRIVATE
+    ${Boost_LIBRARIES}
+    OpenSSL::Crypto
+    nlohmann_json::nlohmann_json
+)
+
 
 # Windows-specific
 if(WIN32)
