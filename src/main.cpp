@@ -25,7 +25,7 @@ void client_mode(const std::string& host, unsigned short port, const std::string
     tcp::resolver resolver(io_context);
 
     boost::asio::connect(*socket, resolver.resolve(host, std::to_string(port)));
-    std::cout << "Connected to server " << host << ":" << port << "\n";
+    std::cout << "Connected to " << host << ":" << port << "\n";
 
     p2pfs::Connection conn(socket);
     conn.receiveFile(output_filename);
@@ -39,6 +39,7 @@ int main() {
 
     std::cout << "Enter port to listen on: ";
     std::cin >> port;
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');     //flush newline from input buffer
 
     // Start server in separate thread
     std::thread server_thread([&]() {
