@@ -21,8 +21,13 @@ set(SOURCES
     src/crypto.cpp
 )
 
+set(TRACKER_SRC
+    src/tracker.cpp
+)
+
 # Add executable
 add_executable(peer ${SOURCES})
+add_executable(tracker ${TRACKER_SRC})
 
 # Include paths
 target_include_directories(peer PRIVATE
@@ -44,6 +49,11 @@ target_link_libraries(peer PRIVATE
     nlohmann_json::nlohmann_json
 )
 
+target_link_libraries(tracker
+    PRIVATE
+    ${Boost_LIBRARIES}
+    nlohmann_json::nlohmann_json
+)
 
 # Windows-specific
 if(WIN32)

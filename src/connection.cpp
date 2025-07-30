@@ -2,28 +2,34 @@
 #include <iostream>
 #include <fstream>
 
-namespace p2pfs{
+namespace p2pfs
+{
     Connection::Connection(std::shared_ptr<Socket> socket)
-    : socket_(std::move(socket)) {}
+        : socket_(std::move(socket)) {}
 
-    void Connection::sendFile(const std::string& filename) {
+    void Connection::sendFile(const std::string &filename)
+    {
         std::ifstream file(filename, std::ios::binary);
-        if (!file) {
+        if (!file)
+        {
             std::cerr << "Error: Cannot open file " << filename << "\n";
             return;
         }
 
         char buffer[CHUNK_SIZE];
-        while (file.read(buffer, CHUNK_SIZE) || file.gcount() > 0) {
+        while (file.read(buffer, CHUNK_SIZE) || file.gcount() > 0)
+        {
             boost::asio::write(*socket_, boost::asio::buffer(buffer, file.gcount()));
         }
 
         std::cout << "Finished sending file: " << filename << "\n";
     }
 
-    void Connection::receiveFile(const std::string& output_filename) {
+    void Connection::receiveFile(const std::string &output_filename)
+    {
         std::ofstream file(output_filename, std::ios::binary);
-        if (!file) {
+        if (!file)
+        {
             std::cerr << "Error: Cannot create file " << output_filename << "\n";
             return;
         }
@@ -31,14 +37,34 @@ namespace p2pfs{
         char buffer[CHUNK_SIZE];
         boost::system::error_code error;
         std::size_t len;
-        while ((len = socket_->read_some(boost::asio::buffer(buffer), error)) > 0) {
+        while ((len = socket_->read_some(boost::asio::buffer(buffer), error)) > 0)
+        {
             file.write(buffer, len);
         }
 
-        if (error != boost::asio::error::eof) {
+        if (error != boost::asio::error::eof)
+        {
             std::cerr << "Receive error: " << error.message() << "\n";
-        } else {
+        }
+        else
+        {
             std::cout << "File received and saved to: " << output_filename << "\n";
         }
+    }
+
+    void Connection::sendJson(const nlohmann::json &message)
+    {
+        std::string msg = message.dump() + "\n"; // newline-delimited protocol
+        boost::asio::write(*socket_, boost::asio::buffer(msg));
+    }
+
+    nlohmann::json Connection::receiveJson()
+    {
+        boost::asio::streambuf buffer;
+        boost::asio::read_until(*socket_, buffer, "\n");
+        std::istream is(&buffer);
+        nlohmann::json json_data;
+        is >> json_data;
+        return json_data;
     }
 }

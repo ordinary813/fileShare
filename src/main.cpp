@@ -2,9 +2,10 @@
 #include "p2pfs/crypto.hpp"
 
 #include <boost/asio.hpp>
+#include <nlohmann/json.hpp>
+
 #include <iostream>
 #include <thread>
-#include <nlohmann/json.hpp>
 #include <filesystem>
 #include <vector>
 #include <fstream>
@@ -14,13 +15,12 @@ using boost::asio::ip::tcp;
 void server_mode(boost::asio::io_context &io_context, unsigned short port)
 {
     tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port));
-    std::cout << "Server listening on port " << port << "\n";
 
     while (true)
     {
         auto socket = std::make_shared<tcp::socket>(io_context);
         acceptor.accept(*socket);
-        std::cout << "Client connected: " << socket->remote_endpoint() << "\n";
+        std::cout << "[Server-side] " << socket->remote_endpoint() << " established connection." << "\n";
 
         p2pfs::Connection conn(socket);
         // APPROVE FILE REQUEST AND SEND FILE
@@ -34,7 +34,7 @@ void client_mode(const std::string &host, unsigned short port)
     tcp::resolver resolver(io_context);
 
     boost::asio::connect(*socket, resolver.resolve(host, std::to_string(port)));
-    std::cout << "Connected to " << host << ":" << port << "\n";
+    std::cout << "[Client-side] Connected to " << host << ":" << port << "\n";
 
     p2pfs::Connection conn(socket);
     // REQUEST FILE FROM PEER
@@ -75,6 +75,101 @@ int generateFileRecords(std::string sharedFilesDirPath)
     return 0;
 }
 
+bool register_with_tracker(const std::string &tracker_ip, int tracker_port, const std::string &my_address)
+{
+    try
+    {
+        boost::asio::io_context io_context;
+        auto socket = std::make_shared<tcp::socket>(io_context);
+        tcp::resolver resolver(io_context);
+        boost::asio::connect(*socket, resolver.resolve(tracker_ip, std::to_string(tracker_port)));
+
+        p2pfs::Connection conn(socket);
+
+        conn.sendJson({{"type", "register"},
+                       {"address", my_address}});
+
+        nlohmann::json response = conn.receiveJson();
+        std::cout << "[Tracker] " << response.dump() << "\n";
+
+        return response.contains("status") && response["status"] == "ok";
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[Tracker] Register failed: " << e.what() << "\n";
+        return false;
+    }
+}
+
+void disconnect_from_tracker(const std::string &tracker_ip, int tracker_port, const std::string &my_address)
+{
+    try
+    {
+        boost::asio::io_context io_context;
+        auto socket = std::make_shared<tcp::socket>(io_context);
+        tcp::resolver resolver(io_context);
+        boost::asio::connect(*socket, resolver.resolve(tracker_ip, std::to_string(tracker_port)));
+
+        p2pfs::Connection conn(socket);
+
+        conn.sendJson({{"type", "disconnect"},
+                       {"address", my_address}});
+
+        std::cout << "[Tracker] Disconnected.\n";
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[Tracker] Disconnect failed: " << e.what() << "\n";
+    }
+}
+
+void get_peers_from_tracker(const std::string &tracker_ip, int tracker_port, const std::string &my_address)
+{
+    std::vector<std::string> peers;
+
+    try
+    {
+        boost::asio::io_context io_context;
+        auto socket = std::make_shared<tcp::socket>(io_context);
+        tcp::resolver resolver(io_context);
+        boost::asio::connect(*socket, resolver.resolve(tracker_ip, std::to_string(tracker_port)));
+
+        p2pfs::Connection conn(socket);
+
+        conn.sendJson({{"type", "get_peers"}});
+
+        nlohmann::json response = conn.receiveJson();
+
+        if (response.contains("peers") && response["peers"].is_array())
+        {
+            for (const auto &peer : response["peers"])
+            {
+                if (peer.is_string())
+                {
+                    peers.push_back(peer.get<std::string>());
+                }
+            }
+
+            std::cout << "[Tracker] Active peers:\n";
+            for (const auto &peer : peers)
+            {
+                std::cout << " - " << peer;
+                if (peer == my_address)
+                    std::cout << " <-- You";
+                std::cout << std::endl;
+            }
+        }
+        else
+        {
+            std::cerr << "[Tracker] Invalid response from tracker.\n";
+        }
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[Tracker] Disconnect failed: " << e.what() << "\n";
+    }
+}
+
 int main()
 {
     // Initial startup
@@ -89,28 +184,46 @@ int main()
         } while (generateFileRecords(sharedFilesDirPath));
     }
 
-    unsigned short port;
-    std::string filename;
+    const std::string tracker_ip = "127.0.0.1";
+    const int tracker_port = 8129;
 
-    boost::asio::io_context io_context;
+    unsigned short port;
 
     std::cout << "Enter port to listen on: ";
     std::cin >> port;
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // flush newline from input buffer
 
+    std::string my_address = "127.0.0.1:" + std::to_string(port);
+
+    if (!register_with_tracker(tracker_ip, tracker_port, my_address))
+    {
+        std::cerr << "Failed to register with tracker. Exiting...\n";
+        return 1;
+    }
+
+    boost::asio::io_context io_context;
+
     // Start server in separate thread
     std::thread server_thread([&]()
                               { server_mode(io_context, port); });
 
-    std::string host, output_filename;
-    std::cout << "Enter host to connect to (or 'quit' to exit): ";
+    std::string host;
+    std::cout << "Enter host to connect to (or 'quit' to exit):\n>> ";
     while (std::getline(std::cin, host) && host != "quit")
     {
+        if (host == "peers")
+        {
+            get_peers_from_tracker(tracker_ip, tracker_port, my_address);
+            continue;
+        }
+        std::string output_filename;
         std::cout << "Enter output filename: ";
         std::getline(std::cin, output_filename);
         client_mode(host, port);
-        std::cout << "Enter host to connect to (or 'quit' to exit): ";
+        std::cout << "Enter host to connect to (or 'quit' to exit):\n>> ";
     }
+
+    disconnect_from_tracker(tracker_ip, tracker_port, my_address);
 
     io_context.stop();
     server_thread.join();
