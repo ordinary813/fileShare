@@ -27,7 +27,7 @@ void server_mode(boost::asio::io_context &io_context, unsigned short port)
     }
 }
 
-void client_mode(const std::string &host, unsigned short port)
+void client_mode(const std::string &host, unsigned short port, std::string action, std::string filepath="")
 {
     boost::asio::io_context io_context;
     auto socket = std::make_shared<tcp::socket>(io_context);
@@ -37,7 +37,19 @@ void client_mode(const std::string &host, unsigned short port)
     std::cout << "[Client-side] Connected to " << host << ":" << port << "\n";
 
     p2pfs::Connection conn(socket);
-    // REQUEST FILE FROM PEER
+
+    if (action == "send")
+    {
+        conn.sendFile(filepath);
+    }
+    else if (action == "download")
+    {
+    }
+    else
+    {
+        std::cerr << "Invalid aciton.\n";
+        return;
+    }
 }
 
 // Generates initial file records
@@ -73,6 +85,43 @@ int generateFileRecords(std::string sharedFilesDirPath)
     out << std::setw(4) << fileRecords << std::endl;
 
     return 0;
+}
+
+nlohmann::json printFileRecords()
+{
+    std::ifstream ifs("file_records.json");
+    if (!ifs.is_open())
+    {
+        std::cerr << "Failed to open file_records.json\n";
+        return 1;
+    }
+
+    nlohmann::json fileRecords;
+    try
+    {
+        ifs >> fileRecords;
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "JSON parse error: " << e.what() << '\n';
+        return 1;
+    }
+
+    int counter = 1;
+
+    for (auto entry : fileRecords)
+    {
+        if (entry.contains("filename") && entry["filename"].is_string())
+        {
+            std::cout << counter << ". " << entry["filename"] << '\n';
+        }
+        else
+        {
+            std::cout << counter << ". [Invalid entry]\n";
+        }
+        counter++;
+    }
+    return fileRecords;
 }
 
 bool register_with_tracker(const std::string &tracker_ip, int tracker_port, const std::string &my_address)
@@ -184,6 +233,7 @@ int main()
         } while (generateFileRecords(sharedFilesDirPath));
     }
 
+    // Tracker registration
     const std::string tracker_ip = "127.0.0.1";
     const int tracker_port = 8129;
 
@@ -201,26 +251,69 @@ int main()
         return 1;
     }
 
+    // Peer logic
     boost::asio::io_context io_context;
 
-    // Start server in separate thread
     std::thread server_thread([&]()
                               { server_mode(io_context, port); });
 
-    std::string host;
-    std::cout << "Enter host to connect to (or 'quit' to exit):\n>> ";
-    while (std::getline(std::cin, host) && host != "quit")
+    std::string query;
+    std::string host, hostPort;
+    std::cout << "Select an action:\n1.peers\n2.send\n3.download\n4.quit\n>> ";
+
+    while (std::getline(std::cin, query) && query != "quit")
     {
-        if (host == "peers")
+        if (query == "peers")
         {
             get_peers_from_tracker(tracker_ip, tracker_port, my_address);
             continue;
         }
-        std::string output_filename;
-        std::cout << "Enter output filename: ";
-        std::getline(std::cin, output_filename);
-        client_mode(host, port);
-        std::cout << "Enter host to connect to (or 'quit' to exit):\n>> ";
+        else if (query == "send")
+        {
+            std::cout << "Enter peer to connect: ";
+            std::getline(std::cin, host);
+            std::cout << "Port: ";
+            std::getline(std::cin, hostPort);
+
+            std::cout << "What file would you like to send?\n";
+            nlohmann::json fileRecords = printFileRecords();
+
+            std::cout << "\n>> ";
+            std::string selected_file;
+            std::getline(std::cin, selected_file);
+            int file_index = std::stoi(selected_file) - 1;
+
+            client_mode(host, std::stoi(hostPort), "send", fileRecords[file_index]["relative_path"]);
+
+            host = "";
+            hostPort = "";
+        }
+        else if (query == "download")
+        {
+            std::cout << "Enter peer to connect: ";
+            std::getline(std::cin, host);
+            std::cout << "Port: ";
+            std::getline(std::cin, hostPort);
+
+            std::cout << "What file would you like to download?\n";
+            // LIST CONNECTION'S FILES
+            std::cout << "\n>> ";
+            std::string selected_file;
+            std::getline(std::cin, selected_file);
+            int file_index = std::stoi(selected_file) - 1;
+
+            
+            client_mode(host, std::stoi(hostPort), "download"/*, CHOOSE HOW TO PASS THE SELECTED FILE*/);
+
+            host = "";
+            hostPort = "";
+        }
+        else
+        {
+            std::cerr << "Invalid query, please use an action from the menu." << std::endl;
+        }
+
+        std::cout << "Select an action:\n1.peers\n2.send\n3.download\n4.quit\n>> ";
     }
 
     disconnect_from_tracker(tracker_ip, tracker_port, my_address);

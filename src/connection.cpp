@@ -7,12 +7,12 @@ namespace p2pfs
     Connection::Connection(std::shared_ptr<Socket> socket)
         : socket_(std::move(socket)) {}
 
-    void Connection::sendFile(const std::string &filename)
+    void Connection::sendFile(const std::string &filepath)
     {
-        std::ifstream file(filename, std::ios::binary);
+        std::ifstream file(filepath, std::ios::binary);
         if (!file)
         {
-            std::cerr << "Error: Cannot open file " << filename << "\n";
+            std::cerr << "Error: Cannot open file " << filepath << "\n";
             return;
         }
 
@@ -22,7 +22,7 @@ namespace p2pfs
             boost::asio::write(*socket_, boost::asio::buffer(buffer, file.gcount()));
         }
 
-        std::cout << "Finished sending file: " << filename << "\n";
+        std::cout << "Finished sending file: " << filepath << "\n";
     }
 
     void Connection::receiveFile(const std::string &output_filename)
