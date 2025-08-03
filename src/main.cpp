@@ -27,7 +27,7 @@ void server_mode(boost::asio::io_context &io_context, unsigned short port)
     }
 }
 
-void client_mode(const std::string &host, unsigned short port, std::string action, std::string filepath="")
+void client_mode(const std::string &host, unsigned short port, std::string action, std::string filepath="", std::string output_filename="")
 {
     boost::asio::io_context io_context;
     auto socket = std::make_shared<tcp::socket>(io_context);
@@ -44,6 +44,7 @@ void client_mode(const std::string &host, unsigned short port, std::string actio
     }
     else if (action == "download")
     {
+        conn.requestFile(filepath, output_filename);
     }
     else
     {
@@ -297,13 +298,19 @@ int main()
 
             std::cout << "What file would you like to download?\n";
             // LIST CONNECTION'S FILES
+            nlohmann::json fileRecords = printGuestFileRecords();
+
             std::cout << "\n>> ";
             std::string selected_file;
             std::getline(std::cin, selected_file);
             int file_index = std::stoi(selected_file) - 1;
 
+            std::string output_filename;
+            std::cout << "Port: ";
+            std::getline(std::cin, output_filename);
+
             
-            client_mode(host, std::stoi(hostPort), "download"/*, CHOOSE HOW TO PASS THE SELECTED FILE*/);
+            client_mode(host, std::stoi(hostPort), "download", fileRecords[file_index]["relative_path"], output_filename);
 
             host = "";
             hostPort = "";
