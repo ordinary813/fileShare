@@ -23,11 +23,23 @@ void server_mode(boost::asio::io_context &io_context, unsigned short port)
         std::cout << "[Server-side] " << socket->remote_endpoint() << " established connection." << "\n";
 
         p2pfs::Connection conn(socket);
-        // APPROVE FILE REQUEST AND SEND FILE
+        //CHECK
+        nlohmann::json req = conn.receiveJson();
+
+        if (req.contains("type") && req["type"] == "download_request")
+        {
+            std::string filename = req["filename"];
+            conn.sendFile("shared_files/" + filename);
+        }
+        else
+        {
+            conn.receiveFile();
+        }
+        //
     }
 }
 
-void client_mode(const std::string &host, unsigned short port, std::string action, std::string filepath="")
+void client_mode(const std::string &host, unsigned short port, std::string action, std::string filepath = "")
 {
     boost::asio::io_context io_context;
     auto socket = std::make_shared<tcp::socket>(io_context);
@@ -44,6 +56,10 @@ void client_mode(const std::string &host, unsigned short port, std::string actio
     }
     else if (action == "download")
     {
+        // CHECK
+        conn.sendJson({{"type", "download_request"}, {"filename", filepath}});
+        conn.receiveFile();
+        //
     }
     else
     {
@@ -302,8 +318,7 @@ int main()
             std::getline(std::cin, selected_file);
             int file_index = std::stoi(selected_file) - 1;
 
-            
-            client_mode(host, std::stoi(hostPort), "download"/*, CHOOSE HOW TO PASS THE SELECTED FILE*/);
+            client_mode(host, std::stoi(hostPort), "download" /*, CHOOSE HOW TO PASS THE SELECTED FILE*/);
 
             host = "";
             hostPort = "";
