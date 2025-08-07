@@ -16,6 +16,7 @@ namespace p2pfs
 
         void sendFile(const std::string &filename);
         void receiveFile(const std::string &output_filename);
+        void requestFile(const std::string &requestedFile, const std::string &output_filename);
 
         void sendJson(const nlohmann::json &message);
         nlohmann::json receiveJson();

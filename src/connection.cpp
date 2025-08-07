@@ -52,6 +52,11 @@ namespace p2pfs
         }
     }
 
+    void Connection::requestFile(const std::string &requestedFile, const std::string &output_filename)
+    {
+        
+    }
+
     void Connection::sendJson(const nlohmann::json &message)
     {
         std::string msg = message.dump() + "\n"; // newline-delimited protocol

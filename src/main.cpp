@@ -313,10 +313,16 @@ int main()
 
             std::cout << "What file would you like to download?\n";
             // LIST CONNECTION'S FILES
+            nlohmann::json fileRecords = printGuestFileRecords();
+
             std::cout << "\n>> ";
             std::string selected_file;
             std::getline(std::cin, selected_file);
             int file_index = std::stoi(selected_file) - 1;
+
+            std::string output_filename;
+            std::cout << "Port: ";
+            std::getline(std::cin, output_filename);
 
             client_mode(host, std::stoi(hostPort), "download" /*, CHOOSE HOW TO PASS THE SELECTED FILE*/);
 
