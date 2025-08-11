@@ -3,54 +3,55 @@
 #include <unordered_set>
 #include <iostream>
 #include <fstream>
-
-#define PORT 8129
+#include <thread>
+#include <mutex>
 
 using boost::asio::ip::tcp;
 using json = nlohmann::json;
 
 std::unordered_set<std::string> peer_list;
 const std::string peer_file = "peers.json";
+std::mutex peer_mutex;
 
 void load_peers_from_file()
 {
     std::ifstream infile(peer_file);
-    if (infile)
+    if (!infile)
+        return;
+    json j;
+    infile >> j;
+    if (j.contains("peers") && j["peers"].is_array())
     {
-        json j;
-        infile >> j;
-        for (const auto &peer : j["peers"])
-        {
-            peer_list.insert(peer.get<std::string>());
-        }
+        std::lock_guard lock(peer_mutex);
+        for (auto &p : j["peers"])
+            peer_list.insert(p.get<std::string>());
     }
 }
 
 void save_peers_to_file()
 {
     json j;
-    j["peers"] = json::array();
-    for (const auto &peer : peer_list)
     {
-        j["peers"].push_back(peer);
+        std::lock_guard lock(peer_mutex);
+        j["peers"] = json::array();
+        for (auto &p : peer_list)
+            j["peers"].push_back(p);
     }
-    std::ofstream outfile(peer_file);
-    outfile << j.dump(4);
+    std::ofstream out(peer_file);
+    out << j.dump(4) << std::endl;
 }
 
-bool is_peer_alive(const std::string &address)
+bool is_peer_alive(const std::string &addr)
 {
     try
     {
-        size_t colon = address.find(':');
-        std::string ip = address.substr(0, colon);
-        int port = std::stoi(address.substr(colon + 1));
-
-        boost::asio::io_context io_context;
-        tcp::socket socket(io_context);
-        tcp::resolver resolver(io_context);
-
-        boost::asio::connect(socket, resolver.resolve(ip, std::to_string(port)));
+        auto colon = addr.find(':');
+        auto ip = addr.substr(0, colon);
+        auto port = addr.substr(colon + 1);
+        boost::asio::io_context ctx;
+        tcp::socket sock(ctx);
+        tcp::resolver resolver(ctx);
+        boost::asio::connect(sock, resolver.resolve(ip, port));
         return true;
     }
     catch (...)
@@ -65,64 +66,64 @@ void handle_client(tcp::socket socket)
     {
         boost::asio::streambuf buf;
         boost::asio::read_until(socket, buf, "\n");
-
         std::istream is(&buf);
-        json request;
-        is >> request;
+        json req;
+        is >> req;
+        json resp;
 
-        json response;
-
-        if (request["type"] == "register")
+        std::string type = req.value("type", "");
+        if (type == "register")
         {
-            std::string peer = request["address"];
-            peer_list.insert(peer);
-            save_peers_to_file();
-            std::cout << peer << " connected" << std::endl;
-            response["status"] = "ok";
-        }
-        else if (request["type"] == "get_peers")
-        {
-            response["peers"] = json::array();
-            std::unordered_set<std::string> unreachable;
-
-            for (const auto &peer : peer_list)
+            std::string addr = req["address"];
             {
-                if (is_peer_alive(peer))
-                {
-                    response["peers"].push_back(peer);
-                }
-                else
-                {
-                    unreachable.insert(peer);
-                }
+                std::lock_guard lock(peer_mutex);
+                peer_list.insert(addr);
             }
-
-            for (const auto &peer : unreachable)
-            {
-                peer_list.erase(peer);
-            }
-
             save_peers_to_file();
+            resp["status"] = "ok";
+            std::cout << "Registered " << addr << "\n";
         }
-        else if (request["type"] == "disconnect")
+        else if (type == "get_peers")
         {
-            std::string peer = request["address"];
-            peer_list.erase(peer);
+            json arr = json::array();
+            std::vector<std::string> to_erase;
+            {
+                std::lock_guard lock(peer_mutex);
+                for (auto &p : peer_list)
+                {
+                    if (is_peer_alive(p))
+                        arr.push_back(p);
+                    else
+                        to_erase.push_back(p);
+                }
+                for (auto &e : to_erase)
+                    peer_list.erase(e);
+            }
+            if (!to_erase.empty())
+                save_peers_to_file();
+            resp["peers"] = arr;
+        }
+        else if (type == "disconnect")
+        {
+            std::string addr = req["address"];
+            {
+                std::lock_guard lock(peer_mutex);
+                peer_list.erase(addr);
+            }
             save_peers_to_file();
-            std::cout << peer << " disconnected" << std::endl;
-            response["status"] = "disconnected";
+            resp["status"] = "disconnected";
+            std::cout << "Disconnected " << addr << "\n";
         }
         else
         {
-            response["error"] = "Unknown request type";
+            resp["error"] = "unknown";
         }
-
-        std::string resp = response.dump() + "\n";
-        boost::asio::write(socket, boost::asio::buffer(resp));
+        std::string s = resp.dump() + "\n";
+        boost::asio::write(socket, boost::asio::buffer(s));
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Client error: " << e.what() << std::endl;
+        std::cerr << "tracker client error: " << e.what() << "\n";
     }
 }
 
@@ -131,20 +132,19 @@ int main()
     try
     {
         load_peers_from_file();
-
-        boost::asio::io_context io_context;
-        tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), PORT));
-        std::cout << "Tracker running on port " << PORT << std::endl;
-
+        boost::asio::io_context ctx;
+        tcp::acceptor acceptor(ctx, tcp::endpoint(tcp::v4(), 8129));
+        std::cout << "Tracker listening on 8129\n";
         while (true)
         {
-            tcp::socket socket(io_context);
-            acceptor.accept(socket);
-            std::thread(handle_client, std::move(socket)).detach(); // concurrent handling
+            tcp::socket sock(ctx);
+            acceptor.accept(sock);
+            std::thread(handle_client, std::move(sock)).detach();
         }
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Fatal tracker error: " << e.what() << std::endl;
+        std::cerr << "tracker fatal: " << e.what() << "\n";
     }
+    return 0;
 }

@@ -1,52 +1,49 @@
+// crypto.cpp
+#include "p2pfs/crypto.hpp"
 #include <openssl/evp.h>
-#include <string>
-#include <vector>
 #include <fstream>
-#include <iomanip>
+#include <vector>
+#include <stdexcept>
 #include <sstream>
+#include <iomanip>
 
 namespace p2pfs
 {
-    std::string calculate_sha256(const std::string &filePath)
+
+    std::string calculate_sha256(const std::string &filename)
     {
-        std::ifstream file(filePath, std::ios::binary);
-        if (!file)
-            return "";
+        unsigned char hash[EVP_MAX_MD_SIZE];
+        unsigned int length = 0;
 
         EVP_MD_CTX *ctx = EVP_MD_CTX_new();
         if (!ctx)
-            return "";
+            throw std::runtime_error("Failed to create EVP_MD_CTX");
 
         if (EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr) != 1)
-        {
-            EVP_MD_CTX_free(ctx);
-            return "";
-        }
+            throw std::runtime_error("Digest init failed");
+
+        std::ifstream file(filename, std::ios::binary);
+        if (!file.is_open())
+            throw std::runtime_error("Could not open file: " + filename);
 
         std::vector<char> buffer(8192);
-        while (file.read(buffer.data(), buffer.size()) || file.gcount())
+        while (file.good())
         {
+            file.read(buffer.data(), buffer.size());
             if (EVP_DigestUpdate(ctx, buffer.data(), file.gcount()) != 1)
-            {
-                EVP_MD_CTX_free(ctx);
-                return "";
-            }
+                throw std::runtime_error("Digest update failed");
         }
 
-        unsigned char hash[EVP_MAX_MD_SIZE];
-        unsigned int hash_len = 0;
-        if (EVP_DigestFinal_ex(ctx, hash, &hash_len) != 1)
-        {
-            EVP_MD_CTX_free(ctx);
-            return "";
-        }
+        if (EVP_DigestFinal_ex(ctx, hash, &length) != 1)
+            throw std::runtime_error("Digest final failed");
 
         EVP_MD_CTX_free(ctx);
 
-        std::ostringstream result;
-        for (unsigned int i = 0; i < hash_len; ++i)
-            result << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
+        std::ostringstream oss;
+        for (unsigned int i = 0; i < length; ++i)
+            oss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
 
-        return result.str();
+        return oss.str();
     }
-}
+
+} // namespace p2pfs
