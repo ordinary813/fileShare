@@ -62,7 +62,11 @@ bool register_with_tracker(const std::string &tracker_ip, int tracker_port, cons
         boost::asio::io_context io;
         auto socket = std::make_shared<tcp::socket>(io);
         tcp::resolver resolver(io);
-        boost::asio::connect(*socket, resolver.resolve(tracker_ip, std::to_string(tracker_port)));
+
+        boost::asio::connect(*socket, 
+            resolver.resolve(tracker_ip,std::to_string(tracker_port))
+        );
+
         p2pfs::Connection conn(socket);
         conn.sendJson({{"type", "register"}, {"address", my_address}});
         json resp = conn.receiveJson();
@@ -147,21 +151,18 @@ json read_file_records()
 
 int main()
 {
+    std::string const shared_dir = "shared_files";
+    std::string const download_dir = "downloads";
     // ensure directories exist
-    fs::create_directories("shared_files");
-    fs::create_directories("downloads");
+    fs::create_directories(shared_dir);
+    fs::create_directories(download_dir);
 
-    if (!fs::exists("file_records.json"))
+    // Update file records
+    if(generateFileRecords(shared_dir))
     {
-        std::string dir;
-        do
-        {
-            std::cout << "Enter directory to share files from (relative to shared_files/ or absolute): ";
-            std::getline(std::cin, dir);
-            // allow user to place files in shared_files or point elsewhere
-            if (dir.empty())
-                dir = "shared_files";
-        } while (generateFileRecords(dir));
+        std::cout << "File record generation failed!" << std::endl;
+        return 1;
+
     }
 
     const std::string tracker_ip = "127.0.0.1";

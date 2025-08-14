@@ -1,3 +1,5 @@
+#include "p2pfs/connection.hpp"
+
 #include <boost/asio.hpp>
 #include <nlohmann/json.hpp>
 #include <unordered_set>
@@ -64,11 +66,10 @@ void handle_client(tcp::socket socket)
 {
     try
     {
-        boost::asio::streambuf buf;
-        boost::asio::read_until(socket, buf, "\n");
-        std::istream is(&buf);
-        json req;
-        is >> req;
+        auto sock_ptr = std::make_shared<tcp::socket>(std::move(socket));
+        p2pfs::Connection conn(sock_ptr);
+
+        json req = conn.receiveJson();
         json resp;
 
         std::string type = req.value("type", "");
@@ -132,14 +133,14 @@ int main()
     try
     {
         load_peers_from_file();
-        boost::asio::io_context ctx;
-        tcp::acceptor acceptor(ctx, tcp::endpoint(tcp::v4(), 8129));
+        boost::asio::io_context io;
+        tcp::acceptor acceptor(io, tcp::endpoint(tcp::v4(), 8129));
         std::cout << "Tracker listening on 8129\n";
         while (true)
         {
-            tcp::socket sock(ctx);
-            acceptor.accept(sock);
-            std::thread(handle_client, std::move(sock)).detach();
+            auto socket = std::make_shared<tcp::socket>(io);
+            acceptor.accept(*socket);
+            std::thread(handle_client, std::move(socket)).detach();
         }
     }
     catch (const std::exception &e)
