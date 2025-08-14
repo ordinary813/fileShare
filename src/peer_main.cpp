@@ -14,6 +14,16 @@ using boost::asio::ip::tcp;
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
+/**
+ * 
+ * @brief Listening loop.
+ * 
+ * Used asynchronously for listening to incoming connections to our peer.
+ * 
+ * @param io_context the io context of the current session (local).
+ * @param port Listen to incoming connections on this port.
+ * 
+ */
 void server_mode(boost::asio::io_context &io_context, unsigned short port)
 {
     tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port));

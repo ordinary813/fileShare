@@ -9,7 +9,13 @@
 
 namespace p2pfs
 {
-
+    /**
+     * 
+     * @brief Calculates the sha256 of a given file.
+     * @param filename A path to the file.
+     * @return Returns the sha256 as a string.
+     * 
+     */
     std::string calculate_sha256(const std::string &filename)
     {
         unsigned char hash[EVP_MAX_MD_SIZE];
@@ -46,4 +52,4 @@ namespace p2pfs
         return oss.str();
     }
 
-} // namespace p2pfs
+}
