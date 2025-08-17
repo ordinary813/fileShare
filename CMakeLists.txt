@@ -18,6 +18,7 @@ set(PEER_SOURCES
     src/connection.cpp
     src/crypto.cpp
     src/peer_main.cpp
+    src/peer.cpp
 )
 
 set(TRACKER_SOURCES
