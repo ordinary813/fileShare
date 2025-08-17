@@ -50,9 +50,9 @@ bool is_peer_alive(const std::string &addr)
         auto colon = addr.find(':');
         auto ip = addr.substr(0, colon);
         auto port = addr.substr(colon + 1);
-        boost::asio::io_context ctx;
-        tcp::socket sock(ctx);
-        tcp::resolver resolver(ctx);
+        boost::asio::io_context io;
+        tcp::socket sock(io);
+        tcp::resolver resolver(io);
         boost::asio::connect(sock, resolver.resolve(ip, port));
         return true;
     }
@@ -62,12 +62,11 @@ bool is_peer_alive(const std::string &addr)
     }
 }
 
-void handle_client(tcp::socket socket)
+void handle_client(std::shared_ptr<tcp::socket> socket)
 {
     try
     {
-        auto sock_ptr = std::make_shared<tcp::socket>(std::move(socket));
-        p2pfs::Connection conn(sock_ptr);
+        p2pfs::Connection conn(socket);
 
         json req = conn.receiveJson();
         json resp;
@@ -120,7 +119,7 @@ void handle_client(tcp::socket socket)
             resp["error"] = "unknown";
         }
         std::string s = resp.dump() + "\n";
-        boost::asio::write(socket, boost::asio::buffer(s));
+        boost::asio::write(*socket, boost::asio::buffer(s));
     }
     catch (const std::exception &e)
     {
@@ -140,7 +139,7 @@ int main()
         {
             auto socket = std::make_shared<tcp::socket>(io);
             acceptor.accept(*socket);
-            std::thread(handle_client, std::move(socket)).detach();
+            std::thread(handle_client, socket).detach();
         }
     }
     catch (const std::exception &e)

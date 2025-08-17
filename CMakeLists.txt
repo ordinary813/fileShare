@@ -20,11 +20,16 @@ set(PEER_SOURCES
     src/peer_main.cpp
 )
 
+set(TRACKER_SOURCES
+    src/tracker.cpp
+    src/connection.cpp
+)
+
 add_executable(peer ${PEER_SOURCES})
 target_include_directories(peer PRIVATE ${CMAKE_SOURCE_DIR}/include ${Boost_INCLUDE_DIRS})
 target_link_libraries(peer PRIVATE ${Boost_LIBRARIES} OpenSSL::Crypto nlohmann_json::nlohmann_json)
 
-add_executable(tracker src/tracker.cpp)
+add_executable(tracker ${TRACKER_SOURCES})
 target_include_directories(tracker PRIVATE ${CMAKE_SOURCE_DIR}/include ${Boost_INCLUDE_DIRS})
 target_link_libraries(tracker PRIVATE ${Boost_LIBRARIES} nlohmann_json::nlohmann_json)
 

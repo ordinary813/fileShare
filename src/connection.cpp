@@ -8,12 +8,14 @@ namespace p2pfs
     Connection::Connection(std::shared_ptr<Socket> socket)
         : socket_(std::move(socket)) {}
 
+    // Writes the json as a string into the socket buffer
     void Connection::sendJson(const json &message)
     {
         std::string msg = message.dump() + "\n";
         boost::asio::write(*socket_, boost::asio::buffer(msg));
     }
 
+    // Reads from the socket buffer until '\n'
     json Connection::receiveJson()
     {
         boost::asio::streambuf buf;
@@ -37,7 +39,10 @@ namespace p2pfs
         file.seekg(0);
 
         // send header
-        json hdr = {{"type", "file"}, {"filename", std::filesystem::path(filepath).filename().string()}, {"filesize", filesize}};
+        json hdr = {
+            {"type", "file"},
+            {"filename", std::filesystem::path(filepath).filename().string()},
+            {"filesize", filesize}};
         sendJson(hdr);
 
         // send raw bytes
