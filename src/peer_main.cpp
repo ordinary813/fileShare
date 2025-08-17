@@ -9,6 +9,8 @@
 #include <filesystem>
 #include <vector>
 #include <fstream>
+#include <atomic>
+#include <csignal>
 
 using boost::asio::ip::tcp;
 using json = nlohmann::json;
@@ -24,6 +26,11 @@ namespace fs = std::filesystem;
  * @param port Listen to incoming connections on this port.
  * 
  */
+
+std::atomic<bool> running{true};
+const std::string tracker_ip = "127.0.0.1";
+const int tracker_port = 8129;
+
 void server_mode(boost::asio::io_context &io_context, unsigned short port, std::atomic<bool> &running)
 {
     tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port));
@@ -142,6 +149,16 @@ int generateFileRecords(const std::string &sharedDir)
     return 0;
 }
 
+void terminate_peer_signal(int signal)
+{
+    if(signal == SIGINT)
+    {
+        disconnect_from_tracker(tracker_ip, tracker_port, "127.0.0.1");
+        std::cout << "Shutting down gracefully" << std::endl;
+        std::exit(0);
+    }
+}
+
 json read_file_records()
 {
     std::ifstream ifs("file_records.json");
@@ -152,6 +169,7 @@ json read_file_records()
 
 int main()
 {
+    std::signal(SIGINT, terminate_peer_signal);
     std::string const shared_dir = "shared_files";
     std::string const download_dir = "downloads";
     // ensure directories exist
@@ -164,9 +182,6 @@ int main()
         std::cout << "File record generation failed!" << std::endl;
         return 1;
     }
-
-    const std::string tracker_ip = "127.0.0.1";
-    const int tracker_port = 8129;
 
     unsigned short port;
     std::cout << "Enter port to listen on: ";
@@ -182,7 +197,6 @@ int main()
     }
 
     boost::asio::io_context io;
-    std::atomic<bool> running{true};
     std::thread server_thr([&]()
                            { server_mode(io, port, running); });
 
