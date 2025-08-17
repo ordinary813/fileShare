@@ -24,13 +24,14 @@ namespace fs = std::filesystem;
  * @param port Listen to incoming connections on this port.
  * 
  */
-void server_mode(boost::asio::io_context &io_context, unsigned short port)
+void server_mode(boost::asio::io_context &io_context, unsigned short port, std::atomic<bool> &running)
 {
     tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port));
-    while (true)
+    while (running)
     {
         auto socket = std::make_shared<tcp::socket>(io_context);
-        acceptor.accept(*socket);
+        (void)acceptor.accept(*socket);
+        
         std::thread([socket]()
                     {
             p2pfs::Connection conn(socket);
@@ -162,7 +163,6 @@ int main()
     {
         std::cout << "File record generation failed!" << std::endl;
         return 1;
-
     }
 
     const std::string tracker_ip = "127.0.0.1";
@@ -182,8 +182,9 @@ int main()
     }
 
     boost::asio::io_context io;
+    std::atomic<bool> running{true};
     std::thread server_thr([&]()
-                           { server_mode(io, port); });
+                           { server_mode(io, port, running); });
 
     std::string cmd;
     std::cout << "Commands: peers | list | send | download | quit\n> ";
@@ -269,7 +270,11 @@ int main()
                 int idx = std::stoi(idxs) - 1;
                 std::string rel = remote_files[idx]["relative_path"].get<std::string>();
                 // request download
-                conn.sendJson({{"type", "download"}, {"relative_path", rel}});
+                conn.sendJson(
+                    {
+                        {"type", "download"}, 
+                        {"relative_path", rel}
+                    });
                 conn.receiveFile("downloads");
             }
             catch (const std::exception &e)
@@ -285,6 +290,12 @@ int main()
     }
 
     disconnect_from_tracker(tracker_ip, tracker_port, my_address);
+    running = false;
+    boost::asio::io_context ci;
+    tcp::resolver resolver(ci);
+    tcp::socket sock(ci);
+    boost::asio::connect(sock, resolver.resolve("127.0.0.1", std::to_string(port)));
+    
     io.stop();
     server_thr.join();
     return 0;
