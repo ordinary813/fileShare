@@ -1,4 +1,7 @@
 #include "p2pfs/connection.hpp"
+
+#include "p2pfs/debug.hpp"
+
 #include <boost/asio.hpp>
 #include <fstream>
 #include <iostream>
@@ -43,6 +46,7 @@ namespace p2pfs
             {"type", "file"},
             {"filename", std::filesystem::path(filepath).filename().string()},
             {"filesize", filesize}};
+        debug("(SendFile) Sending json: ", hdr.dump());
         sendJson(hdr);
 
         // send raw bytes
@@ -58,6 +62,7 @@ namespace p2pfs
     {
         // first read JSON header
         json hdr = receiveJson();
+        debug("(ReceiveFile) Received a json: ", hdr.dump());
         if (!hdr.contains("type") || hdr["type"] != "file")
         {
             std::cerr << "receiveFile: expected file header\n";
@@ -94,7 +99,7 @@ namespace p2pfs
             std::cerr << "receiveFile: expected " << filesize << " got " << bytes_read << "\n";
             return false;
         }
-        std::cout << "Saved file to " << outpath << "\n";
+        std::cout << "Recieved file from " << socket_ << "Saved to " << outpath << "\n";
         return true;
     }
 }

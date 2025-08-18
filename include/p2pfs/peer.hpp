@@ -15,6 +15,10 @@ namespace p2pfs
         void start();
         void stop();
 
+        unsigned short getPort();
+        std::string getTrackerIP();
+        int getTrackerPort();
+
         // Access singleton instance (for signal handler)
         static Peer* instance();
         static void set_instance(Peer* p);

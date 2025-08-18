@@ -2,6 +2,8 @@
 #include "p2pfs/crypto.hpp"
 #include "p2pfs/peer.hpp"
 
+#include "p2pfs/debug.hpp"
+
 #include <boost/asio.hpp>
 #include <nlohmann/json.hpp>
 
@@ -69,6 +71,110 @@ json read_file_records()
     return j;
 }
 
+void cmd_loop(p2pfs::Peer &peer)
+{
+    std::string cmd;
+    std::cout << "Commands: peers | list | send | download | quit\n> ";
+    while (std::getline(std::cin, cmd))
+    {
+        if (cmd == "quit")
+            break;
+        if (cmd == "peers")
+        {
+            auto peers = get_peers_from_tracker(peer.getTrackerIP(), peer.getTrackerPort());
+            std::cout << "Peers:\n";
+            for (auto &p : peers)
+                std::cout << " - " << p << "\n";
+        }
+        else if (cmd == "list")
+        {
+            auto recs = read_file_records();
+            int i = 1;
+            for (auto &e : recs)
+            {
+                std::cout << i++ << ". " << e["filename"].get<std::string>() << " (" << e["filesize"].get<uint64_t>() << ")\n";
+            }
+        }
+        else if (cmd == "send")
+        {
+            std::string target, portstr;
+            std::cout << "Peer ip: ";
+            std::getline(std::cin, target);
+            std::cout << "Peer port: ";
+            std::getline(std::cin, portstr);
+            auto recs = read_file_records();
+            std::cout << "Choose file index: ";
+            std::string idxs;
+            std::getline(std::cin, idxs);
+            int idx = std::stoi(idxs) - 1;
+            std::string rel = recs[idx]["relative_path"].get<std::string>();
+            try
+            {
+                boost::asio::io_context ci;
+                tcp::resolver resolver(ci);
+                tcp::socket sock(ci);
+                boost::asio::connect(sock, resolver.resolve(target, portstr));
+                auto s = std::make_shared<tcp::socket>(std::move(sock));
+                p2pfs::Connection conn(s);
+                p2pfs::debug("(CMD_LOOP) Sending file.");
+
+                conn.sendJson({{"type", "upload"}, {"relative_path", rel}});
+                std::string path = (fs::path("shared_files") / rel).string();
+                conn.sendFile(path);
+            }
+            catch (const std::exception &e)
+            {
+                std::cerr << "send error: " << e.what() << "\n";
+            }
+        }
+        else if (cmd == "download")
+        {
+            std::string target, portstr;
+            std::cout << "Peer ip: ";
+            std::getline(std::cin, target);
+            std::cout << "Peer port: ";
+            std::getline(std::cin, portstr);
+            try
+            {
+                boost::asio::io_context ci;
+                tcp::resolver resolver(ci);
+                tcp::socket sock(ci);
+                boost::asio::connect(sock, resolver.resolve(target, portstr));
+                auto s = std::make_shared<tcp::socket>(std::move(sock));
+                p2pfs::Connection conn(s);
+                conn.sendJson({{"type", "list_files"}});
+                json remote_files = conn.receiveJson(); // expect array
+                int i = 1;
+                for (auto &e : remote_files)
+                {
+                    std::cout << i++ << ". " << e["filename"].get<std::string>() << "\n";
+                }
+                std::cout << "Choose file index: ";
+                std::string idxs;
+                std::getline(std::cin, idxs);
+                int idx = std::stoi(idxs) - 1;
+                std::string rel = remote_files[idx]["relative_path"].get<std::string>();
+                // request download
+                conn.sendJson(
+                    {
+                        {"type", "download"}, 
+                        {"relative_path", rel}
+                    });
+                conn.receiveFile("downloads");
+            }
+            catch (const std::exception &e)
+            {
+                std::cerr << "download error: " << e.what() << "\n";
+            }
+        }
+        else
+        {
+            std::cout << "unknown\n";
+        }
+        std::cout << "> ";
+    }
+}
+
 int main()
 {
     const std::string tracker_ip = "127.0.0.1";
@@ -100,104 +206,7 @@ int main()
 
     try {
         peer.start();
-        std::string cmd;
-        std::cout << "Commands: peers | list | send | download | quit\n> ";
-        while (std::getline(std::cin, cmd))
-        {
-            if (cmd == "quit")
-                break;
-            if (cmd == "peers")
-            {
-                auto peers = get_peers_from_tracker(tracker_ip, tracker_port);
-                std::cout << "Peers:\n";
-                for (auto &p : peers)
-                    std::cout << " - " << p << "\n";
-            }
-            else if (cmd == "list")
-            {
-                auto recs = read_file_records();
-                int i = 1;
-                for (auto &e : recs)
-                {
-                    std::cout << i++ << ". " << e["filename"].get<std::string>() << " (" << e["filesize"].get<uint64_t>() << ")\n";
-                }
-            }
-            else if (cmd == "send")
-            {
-                std::string target, portstr;
-                std::cout << "Peer ip: ";
-                std::getline(std::cin, target);
-                std::cout << "Peer port: ";
-                std::getline(std::cin, portstr);
-                auto recs = read_file_records();
-                std::cout << "Choose file index: ";
-                std::string idxs;
-                std::getline(std::cin, idxs);
-                int idx = std::stoi(idxs) - 1;
-                std::string rel = recs[idx]["relative_path"].get<std::string>();
-                try
-                {
-                    boost::asio::io_context ci;
-                    tcp::resolver resolver(ci);
-                    tcp::socket sock(ci);
-                    boost::asio::connect(sock, resolver.resolve(target, portstr));
-                    auto s = std::make_shared<tcp::socket>(std::move(sock));
-                    p2pfs::Connection conn(s);
-                    conn.sendJson({{"type", "upload"}, {"relative_path", rel}});
-                    std::string path = (fs::path("shared_files") / rel).string();
-                    conn.sendFile(path);
-                }
-                catch (const std::exception &e)
-                {
-                    std::cerr << "send error: " << e.what() << "\n";
-                }
-            }
-            else if (cmd == "download")
-            {
-                std::string target, portstr;
-                std::cout << "Peer ip: ";
-                std::getline(std::cin, target);
-                std::cout << "Peer port: ";
-                std::getline(std::cin, portstr);
-                try
-                {
-                    boost::asio::io_context ci;
-                    tcp::resolver resolver(ci);
-                    tcp::socket sock(ci);
-                    boost::asio::connect(sock, resolver.resolve(target, portstr));
-                    auto s = std::make_shared<tcp::socket>(std::move(sock));
-                    p2pfs::Connection conn(s);
-                    conn.sendJson({{"type", "list_files"}});
-                    json remote_files = conn.receiveJson(); // expect array
-                    int i = 1;
-                    for (auto &e : remote_files)
-                    {
-                        std::cout << i++ << ". " << e["filename"].get<std::string>() << "\n";
-                    }
-                    std::cout << "Choose file index: ";
-                    std::string idxs;
-                    std::getline(std::cin, idxs);
-                    int idx = std::stoi(idxs) - 1;
-                    std::string rel = remote_files[idx]["relative_path"].get<std::string>();
-                    // request download
-                    conn.sendJson(
-                        {
-                            {"type", "download"}, 
-                            {"relative_path", rel}
-                        });
-                    conn.receiveFile("downloads");
-                }
-                catch (const std::exception &e)
-                {
-                    std::cerr << "download error: " << e.what() << "\n";
-                }
-            }
-            else
-            {
-                std::cout << "unknown\n";
-            }
-            std::cout << "> ";
-        }
+        cmd_loop(peer);
     } catch (const std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;
     }

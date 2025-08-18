@@ -1,6 +1,8 @@
 #include "p2pfs/peer.hpp"
 #include "p2pfs/connection.hpp"
 
+#include "p2pfs/debug.hpp"
+
 #include <filesystem>
 #include <csignal>
 #include <fstream>
@@ -56,8 +58,13 @@ namespace p2pfs{
             server_thread_.join();
 
         std::cout << "Peer stopped\n";
-        //std::exit(0);
+        std::exit(0);
     }
+
+    // Getters
+    unsigned short Peer::getPort() { return this->port_; }
+    std::string Peer::getTrackerIP() { return this->tracker_ip_; }
+    int Peer::getTrackerPort() { return this->tracker_port_; }
 
     // Server loop 
     void Peer::server_mode() {
@@ -75,6 +82,7 @@ namespace p2pfs{
                 p2pfs::Connection conn(socket);
                 try {
                     json req = conn.receiveJson();
+                    debug("(SERVER_MODE) recieved a json: ", req.dump());
                     std::string type = req.value("type", "");
                     if (type == "list_files") {
                         std::ifstream ifs("file_records.json");
@@ -85,6 +93,9 @@ namespace p2pfs{
                         std::string rel = req["relative_path"];
                         std::string path = (fs::path("shared_files") / rel).string();
                         conn.sendFile(path);
+                    } else if(type == "upload") {
+                        debug("(SERVER_MODE) Preparing to receive file.");
+                        conn.receiveFile("downloads");
                     }
                 } catch (...) {}
             }).detach();

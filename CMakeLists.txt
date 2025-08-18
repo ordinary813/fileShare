@@ -19,11 +19,13 @@ set(PEER_SOURCES
     src/crypto.cpp
     src/peer_main.cpp
     src/peer.cpp
+    src/debug.cpp
 )
 
 set(TRACKER_SOURCES
     src/tracker.cpp
     src/connection.cpp
+    src/debug.cpp
 )
 
 add_executable(peer ${PEER_SOURCES})
