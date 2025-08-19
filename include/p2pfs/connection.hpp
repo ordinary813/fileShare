@@ -17,7 +17,7 @@ namespace p2pfs
         json receiveJson();
 
         bool sendFile(const std::string &filepath);
-        bool receiveFile(const std::string &output_dir, const json req=nullptr);
+        bool receiveFile(const std::string &output_dir);
 
     private:
         std::shared_ptr<Socket> socket_;

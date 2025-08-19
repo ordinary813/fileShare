@@ -93,9 +93,9 @@ namespace p2pfs{
                         std::string rel = req["relative_path"];
                         std::string path = (fs::path("shared_files") / rel).string();
                         conn.sendFile(path);
-                    } else if(type == "file") {
-                        debug("(SERVER_MODE) Preparing to receive file.", req.dump());
-                        conn.receiveFile("downloads", req);
+                    } else if(type == "upload") {
+                        debug("(SERVER_MODE) UPLOAD = ", req.dump());
+                        conn.receiveFile("downloads");
                     }
                 } catch (...) {}
             }).detach();

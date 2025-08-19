@@ -26,6 +26,7 @@ namespace p2pfs
         std::istream is(&buf);
         json j;
         is >> j;
+        debug("Receive json: ", j.dump());
         return j;
     }
 
@@ -58,14 +59,9 @@ namespace p2pfs
         return true;
     }
 
-    bool Connection::receiveFile(const std::string &output_dir, const json req)
+    bool Connection::receiveFile(const std::string &output_dir)
     {
-        json hdr;
-        // first read JSON header
-        if(req.is_null())
-            hdr = receiveJson();
-        else
-            hdr = req;
+        json hdr = receiveJson();
         debug("(ReceiveFile) Received a json: ", hdr.dump());
         if (!hdr.contains("type") || hdr["type"] != "file")
         {
