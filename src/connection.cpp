@@ -58,16 +58,21 @@ namespace p2pfs
         return true;
     }
 
-    bool Connection::receiveFile(const std::string &output_dir)
+    bool Connection::receiveFile(const std::string &output_dir, const json req)
     {
+        json hdr;
         // first read JSON header
-        json hdr = receiveJson();
+        if(req.is_null())
+            hdr = receiveJson();
+        else
+            hdr = req;
         debug("(ReceiveFile) Received a json: ", hdr.dump());
         if (!hdr.contains("type") || hdr["type"] != "file")
         {
             std::cerr << "receiveFile: expected file header\n";
             return false;
         }
+        // no filename in the header when sending a file. look into it
         std::string filename = hdr["filename"];
         uint64_t filesize = hdr["filesize"];
 

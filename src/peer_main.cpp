@@ -118,7 +118,7 @@ void cmd_loop(p2pfs::Peer &peer)
                 p2pfs::Connection conn(s);
                 p2pfs::debug("(CMD_LOOP) Sending file.");
 
-                conn.sendJson({{"type", "upload"}, {"relative_path", rel}});
+                conn.sendJson({{"type", "file"}, {"relative_path", rel}});
                 std::string path = (fs::path("shared_files") / rel).string();
                 conn.sendFile(path);
             }
