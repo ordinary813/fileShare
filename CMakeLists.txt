@@ -1,61 +1,49 @@
 cmake_minimum_required(VERSION 3.10)
 project(fileShare VERSION 1.0 LANGUAGES CXX)
 
-# C++ version
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Boost
-set(CMAKE_FIND_PACKAGE_PREFER_CONFIG TRUE)
-find_package(Boost 1.65 REQUIRED COMPONENTS system)
-if(NOT Boost_FOUND)
-    message(FATAL_ERROR "Boost not found!")
+if(POLICY CMP0167) # CMake >= 3.31
+    cmake_policy(SET CMP0167 NEW)
+    find_package(Boost 1.65 CONFIG REQUIRED COMPONENTS system)
+else()
+    find_package(Boost 1.65 REQUIRED COMPONENTS system)
 endif()
 
 find_package(OpenSSL REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
-# Executable sources
-set(SOURCES
-    src/main.cpp
+set(PEER_SOURCES
     src/connection.cpp
     src/crypto.cpp
+    src/peer_main.cpp
+    src/peer.cpp
+    src/debug.cpp
 )
 
-set(TRACKER_SRC
+set(TRACKER_SOURCES
     src/tracker.cpp
+    src/connection.cpp
+    src/debug.cpp
 )
 
-# Add executable
-add_executable(peer ${SOURCES})
-add_executable(tracker ${TRACKER_SRC})
+add_executable(peer ${PEER_SOURCES})
+target_include_directories(peer PRIVATE ${CMAKE_SOURCE_DIR}/include ${Boost_INCLUDE_DIRS})
+target_link_libraries(peer PRIVATE ${Boost_LIBRARIES} OpenSSL::Crypto nlohmann_json::nlohmann_json)
 
-# Include paths
-target_include_directories(peer PRIVATE
-    ${Boost_INCLUDE_DIRS}
-    ${CMAKE_SOURCE_DIR}/include
+add_executable(tracker ${TRACKER_SOURCES})
+target_include_directories(tracker PRIVATE ${CMAKE_SOURCE_DIR}/include ${Boost_INCLUDE_DIRS})
+target_link_libraries(tracker PRIVATE ${Boost_LIBRARIES} nlohmann_json::nlohmann_json)
+
+# Post-build commands to copy into peer0 and peer1
+add_custom_command(TARGET peer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/peer0
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/peer0/shared_files
+
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/peer1
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/peer1/shared_files
+
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:peer> ${CMAKE_SOURCE_DIR}/peer0/peer
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:peer> ${CMAKE_SOURCE_DIR}/peer1/peer
 )
-
-include(FetchContent)
-FetchContent_Declare(
-  json
-  GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG v3.11.2
-)
-FetchContent_MakeAvailable(json)
-
-target_link_libraries(peer PRIVATE
-    ${Boost_LIBRARIES}
-    OpenSSL::Crypto
-    nlohmann_json::nlohmann_json
-)
-
-target_link_libraries(tracker
-    PRIVATE
-    ${Boost_LIBRARIES}
-    nlohmann_json::nlohmann_json
-)
-
-# Windows-specific
-if(WIN32)
-    target_link_libraries(peer PRIVATE wsock32 ws2_32)
-endif()

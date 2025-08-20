@@ -64,3 +64,5 @@ Makefile
 *.cache
 
 schedule.markdown
+peer0/
+peer1/
