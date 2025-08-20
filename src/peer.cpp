@@ -73,6 +73,10 @@ namespace p2pfs{
             auto socket = std::make_shared<tcp::socket>(io_);
             try {
                 acceptor.accept(*socket);
+
+                //CHECK THIS - disables nagles algo for immidiate send
+                socket->set_option(tcp::no_delay(true));
+
             } catch (...) {
                 break;
             }
@@ -82,7 +86,7 @@ namespace p2pfs{
                 p2pfs::Connection conn(socket);
                 try {
                     json req = conn.receiveJson();
-                    debug("(SERVER_MODE) recieved a json: ", req.dump());
+                    debug("(server_mode) recieved a json (initial request): ", req.dump());
                     std::string type = req.value("type", "");
                     if (type == "list_files") {
                         std::ifstream ifs("file_records.json");
@@ -94,7 +98,7 @@ namespace p2pfs{
                         std::string path = (fs::path("shared_files") / rel).string();
                         conn.sendFile(path);
                     } else if(type == "upload") {
-                        debug("(SERVER_MODE) UPLOAD = ", req.dump());
+                        debug("(server_mode) upload json req");
                         conn.receiveFile("downloads");
                     }
                 } catch (...) {}

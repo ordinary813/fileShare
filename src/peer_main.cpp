@@ -116,9 +116,9 @@ void cmd_loop(p2pfs::Peer &peer)
                 boost::asio::connect(sock, resolver.resolve(target, portstr));
                 auto s = std::make_shared<tcp::socket>(std::move(sock));
                 p2pfs::Connection conn(s);
-                p2pfs::debug("(CMD_LOOP) Sending file.");
-
-                conn.sendJson({{"type", "upload"}, {"relative_path", rel}});
+                json req = {{"type", "upload"}, {"relative_path", rel}};
+                p2pfs::debug("(CMD) Sending json request: ", req.dump());
+                conn.sendJson(req);
                 std::string path = (fs::path("shared_files") / rel).string();
                 conn.sendFile(path);
             }
@@ -142,6 +142,7 @@ void cmd_loop(p2pfs::Peer &peer)
                 boost::asio::connect(sock, resolver.resolve(target, portstr));
                 auto s = std::make_shared<tcp::socket>(std::move(sock));
                 p2pfs::Connection conn(s);
+                
                 conn.sendJson({{"type", "list_files"}});
                 json remote_files = conn.receiveJson(); // expect array
                 int i = 1;
@@ -156,10 +157,8 @@ void cmd_loop(p2pfs::Peer &peer)
                 std::string rel = remote_files[idx]["relative_path"].get<std::string>();
                 // request download
                 conn.sendJson(
-                    {
-                        {"type", "download"}, 
-                        {"relative_path", rel}
-                    });
+                    {{"type", "download"},
+                     {"relative_path", rel}});
                 conn.receiveFile("downloads");
             }
             catch (const std::exception &e)
@@ -175,7 +174,7 @@ void cmd_loop(p2pfs::Peer &peer)
     }
 }
 
-int main()
+int main(int argc, char *argv[])
 {
     const std::string tracker_ip = "127.0.0.1";
     const int tracker_port = 8129;
@@ -188,26 +187,38 @@ int main()
     fs::create_directories(download_dir);
 
     // Update file records
-    if(generateFileRecords(shared_dir))
+    if (generateFileRecords(shared_dir))
     {
         std::cout << "File record generation failed!" << std::endl;
         return 1;
     }
 
+    if (argc > 2)
+    {
+        std::cerr << "Too many arguments entered" << std::endl;
+        std::cout << "Usage: ./peer PORT" << std::endl;
+        return 1;
+    }
     unsigned short port;
-    std::cout << "Enter port to listen on: ";
-    std::cin >> port;
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
+    if (argc == 2)
+        port = std::stoi(argv[1]);
+    else
+    {
+        std::cout << "Enter port to listen on: ";
+        std::cin >> port;
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    }
 
     p2pfs::Peer peer(tracker_ip, tracker_port, port);
-    p2pfs::Peer::set_instance(&peer);       // set the singleton for this process
+    p2pfs::Peer::set_instance(&peer); // set the singleton for this process
 
-
-    try {
+    try
+    {
         peer.start();
         cmd_loop(peer);
-    } catch (const std::exception &e) {
+    }
+    catch (const std::exception &e)
+    {
         std::cerr << "Error: " << e.what() << std::endl;
     }
 

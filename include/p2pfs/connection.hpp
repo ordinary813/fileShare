@@ -21,6 +21,7 @@ namespace p2pfs
 
     private:
         std::shared_ptr<Socket> socket_;
+        boost::asio::streambuf buf_;
         static constexpr std::size_t CHUNK_SIZE = 16 * 1024;
     };
 }

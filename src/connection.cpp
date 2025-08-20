@@ -21,13 +21,20 @@ namespace p2pfs
     // Reads from the socket buffer until '\n'
     json Connection::receiveJson()
     {
-        boost::asio::streambuf buf;
-        boost::asio::read_until(*socket_, buf, "\n");
-        std::istream is(&buf);
-        json j;
-        is >> j;
-        debug("Receive json: ", j.dump());
-        return j;
+        boost::asio::read_until(*socket_, buf_, "\n");
+
+        auto data = buf_.data();
+
+        //DEBUG
+        const char *raw = boost::asio::buffer_cast<const char *>(data);
+        size_t len = boost::asio::buffer_size(data);
+        print_buffer(raw, len);
+
+        std::istream is(&buf_);
+        std::string line;
+        std::getline(is, line);
+
+        return json::parse(line);
     }
 
     bool Connection::sendFile(const std::string &filepath)
@@ -47,11 +54,12 @@ namespace p2pfs
             {"type", "file"},
             {"filename", std::filesystem::path(filepath).filename().string()},
             {"filesize", filesize}};
-        debug("(SendFile) Sending json: ", hdr.dump());
+        debug("(SendFile) Sending header json: ", hdr.dump());
         sendJson(hdr);
 
         // send raw bytes
         std::vector<char> buf(CHUNK_SIZE);
+        debug("(SendFile) Writing file to buffer");
         while (file.read(buf.data(), buf.size()) || file.gcount())
         {
             boost::asio::write(*socket_, boost::asio::buffer(buf.data(), file.gcount()));
@@ -62,13 +70,14 @@ namespace p2pfs
     bool Connection::receiveFile(const std::string &output_dir)
     {
         json hdr = receiveJson();
-        debug("(ReceiveFile) Received a json: ", hdr.dump());
+
+        debug("(receiveFile) Received a header json: ", hdr.dump());
         if (!hdr.contains("type") || hdr["type"] != "file")
         {
             std::cerr << "receiveFile: expected file header\n";
             return false;
         }
-        // no filename in the header when sending a file. look into it
+
         std::string filename = hdr["filename"];
         uint64_t filesize = hdr["filesize"];
 
@@ -78,29 +87,42 @@ namespace p2pfs
         std::ofstream out(outpath, std::ios::binary);
         if (!out)
         {
-            std::cerr << "receiveFile: cannot open " << outpath << "\n";
+            std::cerr << "receiveFile: cannot open " << outpath << std::endl;
             return false;
         }
+        
 
-        uint64_t bytes_read = 0;
-        std::vector<char> buf(CHUNK_SIZE);
-        boost::system::error_code ec;
-        while (bytes_read < filesize)
-        {
-            size_t toread = static_cast<size_t>(std::min<uint64_t>(CHUNK_SIZE, filesize - bytes_read));
-            size_t n = boost::asio::read(*socket_, boost::asio::buffer(buf.data(), toread), ec);
-            if (n == 0)
-                break;
-            out.write(buf.data(), n);
-            bytes_read += n;
-        }
+        //debug
+        auto data = buf_.data();
+        const char *raw = boost::asio::buffer_cast<const char *>(data);
+        size_t len = boost::asio::buffer_size(data);
+        print_buffer(raw, len);
+        //
+
+        out.write(raw, len);
         out.close();
-        if (bytes_read != filesize)
-        {
-            std::cerr << "receiveFile: expected " << filesize << " got " << bytes_read << "\n";
-            return false;
-        }
-        std::cout << "Recieved file from " << socket_ << "Saved to " << outpath << "\n";
+
+
+        // uint64_t bytes_read = 0;
+        // std::vector<char> buf(CHUNK_SIZE);
+        // boost::system::error_code ec;
+        // while (bytes_read < filesize)
+        // {
+        //     size_t toread = static_cast<size_t>(std::min<uint64_t>(CHUNK_SIZE, filesize - bytes_read));
+        //     size_t n = boost::asio::read(*socket_, buf_, ec);
+
+        //     if (n == 0)
+        //         break;
+        //     out.write(buf.data(), n);
+        //     bytes_read += n;
+        // }
+        // out.close();
+        // if (bytes_read != filesize)
+        // {
+        //     std::cerr << "receiveFile: expected " << filesize << " got " << bytes_read << std::endl;
+        //     return false;
+        // }
+        std::cout << "Recieved file from " << socket_->remote_endpoint().address().to_string() << " Saved to " << outpath << std::endl;
         return true;
     }
 }
