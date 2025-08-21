@@ -116,9 +116,10 @@ void cmd_loop(p2pfs::Peer &peer)
                 boost::asio::connect(sock, resolver.resolve(target, portstr));
                 auto s = std::make_shared<tcp::socket>(std::move(sock));
                 p2pfs::Connection conn(s);
+                
                 json req = {{"type", "upload"}, {"relative_path", rel}};
                 p2pfs::debug("(CMD) Sending json request: ", req.dump());
-                conn.sendJson(req);
+                conn.sendJsonAck(req);
                 std::string path = (fs::path("shared_files") / rel).string();
                 conn.sendFile(path);
             }

@@ -14,16 +14,22 @@ namespace p2pfs
     // Writes the json as a string into the socket buffer
     void Connection::sendJson(const json &message)
     {
-        // NEED TO IMPLEMENT A BASIC "HANDSHAKE" FOR BOTH SEND AND DOWNLOAD
-        // !!!!
         std::string msg = message.dump() + "\n";
         boost::asio::write(*socket_, boost::asio::buffer(msg));
 
-        //DEBUG
+        // DEBUG
         auto data = buf_.data();
         const char *raw = boost::asio::buffer_cast<const char *>(data);
         size_t len = boost::asio::buffer_size(data);
         print_buffer(raw, len);
+        // -----
+    }
+
+    bool Connection::sendJsonAck(const json &message)
+    {
+        sendJson(message);
+        json ack = receiveJson();
+        return ack.value("type", "") == "ack";
     }
 
     // Reads from the socket buffer until '\n'
@@ -31,18 +37,27 @@ namespace p2pfs
     {
         boost::asio::read_until(*socket_, buf_, "\n");
 
+        // DEBUG
         auto data = buf_.data();
-
-        //DEBUG
         const char *raw = boost::asio::buffer_cast<const char *>(data);
         size_t len = boost::asio::buffer_size(data);
         print_buffer(raw, len);
+        // -----
 
         std::istream is(&buf_);
         std::string line;
         std::getline(is, line);
 
-        return json::parse(line);
+        json j = json::parse(line);
+
+        return j;
+    }
+
+    json Connection::receiveJsonAck()
+    {
+        json msg = receiveJson();
+        sendJson({{"type", "ack"}});
+        return msg;
     }
 
     bool Connection::sendFile(const std::string &filepath)
@@ -63,7 +78,7 @@ namespace p2pfs
             {"filename", std::filesystem::path(filepath).filename().string()},
             {"filesize", filesize}};
         debug("(SendFile) Sending header json: ", hdr.dump());
-        sendJson(hdr);
+        sendJsonAck(hdr);
 
         // send raw bytes
         std::vector<char> buf(CHUNK_SIZE);
@@ -98,9 +113,8 @@ namespace p2pfs
             std::cerr << "receiveFile: cannot open " << outpath << std::endl;
             return false;
         }
-        
 
-        //debug
+        // debug
         auto data = buf_.data();
         const char *raw = boost::asio::buffer_cast<const char *>(data);
         size_t len = boost::asio::buffer_size(data);
@@ -109,7 +123,6 @@ namespace p2pfs
 
         out.write(raw, len);
         out.close();
-
 
         // uint64_t bytes_read = 0;
         // std::vector<char> buf(CHUNK_SIZE);

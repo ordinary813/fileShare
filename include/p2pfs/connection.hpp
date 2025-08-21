@@ -14,7 +14,9 @@ namespace p2pfs
         Connection(std::shared_ptr<Socket> socket);
 
         void sendJson(const json &message);
+        bool sendJsonAck(const json &message);
         json receiveJson();
+        json receiveJsonAck();
 
         bool sendFile(const std::string &filepath);
         bool receiveFile(const std::string &output_dir);
