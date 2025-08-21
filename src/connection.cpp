@@ -15,6 +15,7 @@ namespace p2pfs
     void Connection::sendJson(const json &message)
     {
         std::string msg = message.dump() + "\n";
+        // buf_.sputn(msg.data(), msg.size());
         boost::asio::write(*socket_, boost::asio::buffer(msg));
 
         // DEBUG
@@ -47,6 +48,8 @@ namespace p2pfs
         std::istream is(&buf_);
         std::string line;
         std::getline(is, line);
+
+        buf_.consume(line.size() + 1);
 
         json j = json::parse(line);
 
@@ -92,7 +95,7 @@ namespace p2pfs
 
     bool Connection::receiveFile(const std::string &output_dir)
     {
-        json hdr = receiveJson();
+        json hdr = receiveJsonAck();
 
         debug("(receiveFile) Received a header json: ", hdr.dump());
         if (!hdr.contains("type") || hdr["type"] != "file")
@@ -113,6 +116,9 @@ namespace p2pfs
             std::cerr << "receiveFile: cannot open " << outpath << std::endl;
             return false;
         }
+
+        // read the socket into buf_
+        boost::asio::read_until(*socket_, buf_, "\n");
 
         // debug
         auto data = buf_.data();
