@@ -14,8 +14,16 @@ namespace p2pfs
     // Writes the json as a string into the socket buffer
     void Connection::sendJson(const json &message)
     {
+        // NEED TO IMPLEMENT A BASIC "HANDSHAKE" FOR BOTH SEND AND DOWNLOAD
+        // !!!!
         std::string msg = message.dump() + "\n";
         boost::asio::write(*socket_, boost::asio::buffer(msg));
+
+        //DEBUG
+        auto data = buf_.data();
+        const char *raw = boost::asio::buffer_cast<const char *>(data);
+        size_t len = boost::asio::buffer_size(data);
+        print_buffer(raw, len);
     }
 
     // Reads from the socket buffer until '\n'
