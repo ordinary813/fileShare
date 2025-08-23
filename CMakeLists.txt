@@ -6,9 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(POLICY CMP0167) # CMake >= 3.31
     cmake_policy(SET CMP0167 NEW)
-    find_package(Boost 1.65 CONFIG REQUIRED COMPONENTS system)
+    find_package(Boost 1.83 CONFIG EXACT REQUIRED COMPONENTS system)
 else()
-    find_package(Boost 1.65 REQUIRED COMPONENTS system)
+    find_package(Boost 1.83 EXACT REQUIRED COMPONENTS system)
 endif()
 
 find_package(OpenSSL REQUIRED)
